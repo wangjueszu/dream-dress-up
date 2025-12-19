@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateImage } from './services/image-api';
 import { settingsManager } from './services/settings';
-import { generateCustomPrompt, DEFAULT_PROMPT_TEMPLATE } from './constants/dreams';
+import { generateCustomPrompt, DEFAULT_PROMPT_TEMPLATE, BUILT_IN_TEMPLATES, TEMPLATES_STORAGE_KEY } from './constants/dreams';
+import type { PromptTemplate } from './constants/dreams';
 import { IMAGE_MODELS } from './types';
 import './App.css';
 
@@ -18,9 +19,11 @@ interface FilmPhoto {
   developProgress: number;
   position: { x: number; y: number };
   isDragging: boolean;
+  isEjecting: boolean;
+  ejectProgress: number; // 0-100 弹出进度
 }
 
-// 历史记录类型
+// 历史记录类型（带位置信息）
 interface HistoryItem {
   id: string;
   name: string;
@@ -28,6 +31,7 @@ interface HistoryItem {
   originalPhoto: string;
   resultPhoto: string;
   timestamp: number;
+  position: { x: number; y: number };
 }
 
 // 本地存储 key
@@ -43,20 +47,28 @@ function App() {
   const [editName, setEditName] = useState('');
   const [editDream, setEditDream] = useState('');
 
-  // 画板上的胶片/照片列表
+  // 画板上的胶片/照片列表（生成中的）
   const [films, setFilms] = useState<FilmPhoto[]>([]);
 
-  // 历史记录
+  // 历史记录（已完成的照片，直接显示在画板上）
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoryItem | null>(null);
+
+  // 拖拽历史记录项
+  const historyDragRef = useRef<{ id: string; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  const [draggingHistoryId, setDraggingHistoryId] = useState<string | null>(null);
 
   // API设置
   const [showSettings, setShowSettings] = useState(false);
   const [tempApiUrl, setTempApiUrl] = useState('https://api.tu-zi.com/v1');
   const [tempApiKey, setTempApiKey] = useState('');
   const [tempModel, setTempModel] = useState('gemini-3-pro-image-preview-vip');
+  const [tempTemplateId, setTempTemplateId] = useState('realistic');
   const [tempPrompt, setTempPrompt] = useState(DEFAULT_PROMPT_TEMPLATE);
+  const [templates, setTemplates] = useState<PromptTemplate[]>(BUILT_IN_TEMPLATES);
+  const [showAddTemplate, setShowAddTemplate] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
 
   // refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -70,10 +82,30 @@ function App() {
     try {
       const saved = localStorage.getItem(HISTORY_KEY);
       if (saved) {
-        setHistory(JSON.parse(saved));
+        const items = JSON.parse(saved) as HistoryItem[];
+        // 为旧数据添加位置信息
+        const itemsWithPosition = items.map((item, index) => ({
+          ...item,
+          position: item.position || {
+            x: 500 + (index % 5) * 180,
+            y: 80 + Math.floor(index / 5) * 220
+          }
+        }));
+        setHistory(itemsWithPosition);
       }
     } catch (e) {
       console.error('加载历史记录失败', e);
+    }
+
+    // 加载自定义模板
+    try {
+      const savedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+      if (savedTemplates) {
+        const customTemplates = JSON.parse(savedTemplates) as PromptTemplate[];
+        setTemplates([...BUILT_IN_TEMPLATES, ...customTemplates]);
+      }
+    } catch (e) {
+      console.error('加载模板失败', e);
     }
 
     // 加载设置
@@ -81,7 +113,21 @@ function App() {
     setTempApiUrl(config.baseUrl);
     setTempApiKey(config.apiKey);
     setTempModel(config.modelName || 'gemini-3-pro-image-preview-vip');
-    setTempPrompt(config.customPrompt || DEFAULT_PROMPT_TEMPLATE);
+    // 加载模板设置
+    const savedTemplateId = (config as any).templateId || 'realistic';
+    setTempTemplateId(savedTemplateId);
+
+    // 加载模板内容
+    const allTemplates = [...BUILT_IN_TEMPLATES];
+    try {
+      const savedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+      if (savedTemplates) {
+        allTemplates.push(...JSON.parse(savedTemplates));
+      }
+    } catch (e) {}
+
+    const template = allTemplates.find(t => t.id === savedTemplateId);
+    setTempPrompt(template?.template || config.customPrompt || DEFAULT_PROMPT_TEMPLATE);
   }, []);
 
   // 启动摄像头
@@ -183,9 +229,14 @@ function App() {
     const now = new Date();
     const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
-    // 创建新胶片（黑色状态）
+    // 创建新胶片（黑色状态，出现在相机上方）
+    const filmId = Date.now().toString();
+    // 胶片出现在相机上方
+    const filmX = 130;
+    const filmY = 30;
+
     const newFilm: FilmPhoto = {
-      id: Date.now().toString(),
+      id: filmId,
       originalPhoto: capturedPhoto,
       name: editName.trim(),
       dream: editDream.trim(),
@@ -193,8 +244,10 @@ function App() {
       isGenerating: true,
       isDeveloping: false,
       developProgress: 0,
-      position: { x: 50 + Math.random() * 100, y: 50 + Math.random() * 50 },
+      position: { x: filmX, y: filmY },
       isDragging: false,
+      isEjecting: true,
+      ejectProgress: 0,
     };
 
     setFilms(prev => [...prev, newFilm]);
@@ -202,6 +255,26 @@ function App() {
     setEditName('');
     setEditDream('');
     setError(null);
+
+    // 胶片缓慢出现动画（渐入效果）
+    let ejectProgress = 0;
+    const ejectInterval = setInterval(() => {
+      ejectProgress += 3;
+      setFilms(prev => prev.map(f =>
+        f.id === filmId
+          ? { ...f, ejectProgress: Math.min(ejectProgress, 100) }
+          : f
+      ));
+
+      if (ejectProgress >= 100) {
+        clearInterval(ejectInterval);
+        setFilms(prev => prev.map(f =>
+          f.id === filmId
+            ? { ...f, isEjecting: false }
+            : f
+        ));
+      }
+    }, 30);
 
     // 开始AI生成
     try {
@@ -212,20 +285,9 @@ function App() {
       if (response.data?.[0]?.url) {
         const imageUrl = response.data[0].url;
 
-        // 保存到历史记录
-        const newItem: HistoryItem = {
-          id: Date.now().toString(),
-          name: newFilm.name || '未命名',
-          dream: newFilm.dream,
-          originalPhoto: newFilm.originalPhoto,
-          resultPhoto: imageUrl,
-          timestamp: Date.now(),
-        };
-        saveHistory([newItem, ...history].slice(0, 50));
-
         // 开始显影动画
         setFilms(prev => prev.map(f =>
-          f.id === newFilm.id
+          f.id === filmId
             ? { ...f, result: imageUrl, isGenerating: false, isDeveloping: true }
             : f
         ));
@@ -234,19 +296,40 @@ function App() {
         let progress = 0;
         const developInterval = setInterval(() => {
           progress += 2;
-          setFilms(prev => prev.map(f =>
-            f.id === newFilm.id
-              ? { ...f, developProgress: Math.min(progress, 100) }
-              : f
-          ));
-          if (progress >= 100) {
-            clearInterval(developInterval);
-            setFilms(prev => prev.map(f =>
-              f.id === newFilm.id
-                ? { ...f, isDeveloping: false }
+          setFilms(prev => {
+            const updated = prev.map(f =>
+              f.id === filmId
+                ? { ...f, developProgress: Math.min(progress, 100) }
                 : f
-            ));
-          }
+            );
+
+            if (progress >= 100) {
+              clearInterval(developInterval);
+              // 显影完成后保存到历史记录并从 films 移除
+              const completedFilm = updated.find(f => f.id === filmId);
+              if (completedFilm) {
+                const newItem: HistoryItem = {
+                  id: Date.now().toString(),
+                  name: completedFilm.name || '未命名',
+                  dream: completedFilm.dream,
+                  originalPhoto: completedFilm.originalPhoto,
+                  resultPhoto: imageUrl,
+                  timestamp: Date.now(),
+                  position: completedFilm.position,
+                };
+                // 使用 setTimeout 确保在 setFilms 之后执行
+                setTimeout(() => {
+                  setHistory(prevHistory => {
+                    const newHistory = [newItem, ...prevHistory].slice(0, 50);
+                    localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+                    return newHistory;
+                  });
+                }, 0);
+              }
+              return updated.filter(f => f.id !== filmId);
+            }
+            return updated;
+          });
         }, 50);
 
       } else {
@@ -255,7 +338,7 @@ function App() {
     } catch (e: any) {
       setError(e.message || '生成失败，请重试');
       // 移除失败的胶片
-      setFilms(prev => prev.filter(f => f.id !== newFilm.id));
+      setFilms(prev => prev.filter(f => f.id !== filmId));
     }
   };
 
@@ -355,6 +438,87 @@ function App() {
     }
   };
 
+  // 记录是否真正拖动过（用于区分点击和拖动）
+  const hasDraggedRef = useRef(false);
+
+  // 历史记录拖拽开始
+  const handleHistoryDragStart = (e: React.MouseEvent | React.TouchEvent, itemId: string) => {
+    const item = history.find(h => h.id === itemId);
+    if (!item) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    historyDragRef.current = {
+      id: itemId,
+      startX: clientX,
+      startY: clientY,
+      offsetX: item.position.x,
+      offsetY: item.position.y,
+    };
+
+    hasDraggedRef.current = false;
+    setDraggingHistoryId(itemId);
+  };
+
+  // 历史记录拖拽移动
+  const handleHistoryDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!historyDragRef.current) return;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    // 检测是否真正移动了（超过5px认为是拖动）
+    const dx = clientX - historyDragRef.current.startX;
+    const dy = clientY - historyDragRef.current.startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      hasDraggedRef.current = true;
+    }
+
+    const newX = historyDragRef.current.offsetX + dx;
+    const newY = historyDragRef.current.offsetY + dy;
+
+    setHistory(prev => prev.map(h =>
+      h.id === historyDragRef.current?.id
+        ? { ...h, position: { x: newX, y: newY } }
+        : h
+    ));
+  }, []);
+
+  // 历史记录拖拽结束
+  const handleHistoryDragEnd = useCallback(() => {
+    if (!historyDragRef.current) return;
+
+    // 保存位置到 localStorage
+    setHistory(prev => {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(prev));
+      return prev;
+    });
+
+    setDraggingHistoryId(null);
+    historyDragRef.current = null;
+  }, []);
+
+  // 监听历史记录拖拽事件
+  useEffect(() => {
+    if (draggingHistoryId) {
+      window.addEventListener('mousemove', handleHistoryDragMove);
+      window.addEventListener('mouseup', handleHistoryDragEnd);
+      window.addEventListener('touchmove', handleHistoryDragMove);
+      window.addEventListener('touchend', handleHistoryDragEnd);
+
+      return () => {
+        window.removeEventListener('mousemove', handleHistoryDragMove);
+        window.removeEventListener('mouseup', handleHistoryDragEnd);
+        window.removeEventListener('touchmove', handleHistoryDragMove);
+        window.removeEventListener('touchend', handleHistoryDragEnd);
+      };
+    }
+  }, [draggingHistoryId, handleHistoryDragMove, handleHistoryDragEnd]);
+
   // 保存设置
   const handleSaveSettings = () => {
     settingsManager.updateConfig({
@@ -362,12 +526,67 @@ function App() {
       apiKey: tempApiKey.trim(),
       modelName: tempModel,
       customPrompt: tempPrompt,
-    });
+      templateId: tempTemplateId,
+    } as any);
     setShowSettings(false);
+  };
+
+  // 切换模板
+  const handleTemplateChange = (templateId: string) => {
+    setTempTemplateId(templateId);
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      setTempPrompt(template.template);
+    }
+  };
+
+  // 添加新模板
+  const handleAddTemplate = () => {
+    if (!newTemplateName.trim() || !tempPrompt.trim()) return;
+
+    const newTemplate: PromptTemplate = {
+      id: `custom-${Date.now()}`,
+      name: newTemplateName.trim(),
+      template: tempPrompt,
+      isBuiltIn: false,
+    };
+
+    const customTemplates = templates.filter(t => !t.isBuiltIn);
+    const updatedCustomTemplates = [...customTemplates, newTemplate];
+
+    // 保存到 localStorage
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedCustomTemplates));
+
+    // 更新状态
+    setTemplates([...BUILT_IN_TEMPLATES, ...updatedCustomTemplates]);
+    setTempTemplateId(newTemplate.id);
+    setNewTemplateName('');
+    setShowAddTemplate(false);
+  };
+
+  // 删除模板
+  const handleDeleteTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template || template.isBuiltIn) return;
+
+    const customTemplates = templates.filter(t => !t.isBuiltIn && t.id !== templateId);
+
+    // 保存到 localStorage
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(customTemplates));
+
+    // 更新状态
+    setTemplates([...BUILT_IN_TEMPLATES, ...customTemplates]);
+
+    // 如果删除的是当前选中的模板，切换到默认模板
+    if (tempTemplateId === templateId) {
+      setTempTemplateId('realistic');
+      setTempPrompt(DEFAULT_PROMPT_TEMPLATE);
+    }
   };
 
   // 重置提示词
   const handleResetPrompt = () => {
+    setTempTemplateId('realistic');
     setTempPrompt(DEFAULT_PROMPT_TEMPLATE);
   };
 
@@ -402,9 +621,7 @@ function App() {
                   className="camera-video"
                 />
                 {!cameraReady && (
-                  <div className="camera-placeholder">
-                    <span>📷</span>
-                  </div>
+                  <div className="camera-placeholder"></div>
                 )}
               </div>
             </div>
@@ -433,13 +650,13 @@ function App() {
         {films.map((film) => (
           <div
             key={film.id}
-            className={`film-card ${film.isDragging ? 'dragging' : ''} ${film.isGenerating ? 'generating' : ''} ${film.isDeveloping ? 'developing' : ''}`}
+            className={`film-card ${film.isDragging ? 'dragging' : ''} ${film.isGenerating ? 'generating' : ''} ${film.isDeveloping ? 'developing' : ''} ${film.isEjecting ? 'ejecting' : ''}`}
             style={{
               left: film.position.x,
               top: film.position.y,
             }}
-            onMouseDown={(e) => handleDragStart(e, film.id)}
-            onTouchStart={(e) => handleDragStart(e, film.id)}
+            onMouseDown={(e) => !film.isEjecting && handleDragStart(e, film.id)}
+            onTouchStart={(e) => !film.isEjecting && handleDragStart(e, film.id)}
           >
             <div className="film-image">
               {/* 黑色胶片底层 */}
@@ -455,12 +672,6 @@ function App() {
                 </div>
               )}
 
-              {/* 生成中提示 */}
-              {film.isGenerating && (
-                <div className="film-loading">
-                  <span>显影中...</span>
-                </div>
-              )}
             </div>
             <div className="film-info">
               <span className="film-dream">{film.dream}</span>
@@ -481,13 +692,42 @@ function App() {
           </div>
         ))}
 
-        {/* 空提示 */}
-        {films.length === 0 && (
-          <div className="canvas-hint">
-            <span>📸</span>
-            <p>拍照后胶片会出现在这里</p>
+        {/* 画板上的历史照片 */}
+        {history.map((item) => (
+          <div
+            key={item.id}
+            className={`film-card completed ${draggingHistoryId === item.id ? 'dragging' : ''}`}
+            style={{
+              left: item.position.x,
+              top: item.position.y,
+            }}
+            onMouseDown={(e) => handleHistoryDragStart(e, item.id)}
+            onTouchStart={(e) => handleHistoryDragStart(e, item.id)}
+            onClick={() => {
+              // 只有在没有拖动的情况下才打开详情
+              if (!hasDraggedRef.current) {
+                setSelectedHistoryItem(item);
+              }
+            }}
+          >
+            <div className="film-image">
+              <img src={item.resultPhoto} alt={item.name} />
+            </div>
+            <div className="film-info">
+              <span className="film-name">{item.name}</span>
+              <span className="film-dream">{item.dream}</span>
+            </div>
+            <button
+              className="film-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteHistoryItem(item.id);
+              }}
+            >
+              ✕
+            </button>
           </div>
-        )}
+        ))}
       </main>
 
       {/* 隐藏的文件输入 */}
@@ -653,8 +893,65 @@ function App() {
                 </select>
               </div>
               <div className="settings-field">
+                <label>风格模板</label>
+                <div className="template-list">
+                  {templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className={`template-item ${tempTemplateId === template.id ? 'active' : ''}`}
+                      onClick={() => handleTemplateChange(template.id)}
+                    >
+                      <span className="template-name">{template.name}</span>
+                      {!template.isBuiltIn && (
+                        <button
+                          className="template-delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTemplate(template.id);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    className="template-add"
+                    onClick={() => setShowAddTemplate(true)}
+                  >
+                    + 添加模板
+                  </button>
+                </div>
+              </div>
+
+              {showAddTemplate && (
+                <div className="settings-field add-template-field">
+                  <label>新模板名称</label>
+                  <input
+                    type="text"
+                    value={newTemplateName}
+                    onChange={(e) => setNewTemplateName(e.target.value)}
+                    placeholder="输入模板名称"
+                    className="input-name"
+                  />
+                  <div className="add-template-actions">
+                    <button className="btn-secondary" onClick={() => setShowAddTemplate(false)}>
+                      取消
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleAddTemplate}
+                      disabled={!newTemplateName.trim()}
+                    >
+                      保存为新模板
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="settings-field">
                 <label>
-                  提示词模板
+                  提示词内容
                   <button className="btn-reset" onClick={handleResetPrompt}>重置</button>
                 </label>
                 <textarea
@@ -665,7 +962,7 @@ function App() {
                   rows={6}
                 />
                 <p className="settings-hint">
-                  使用 <code>{'{dream}'}</code> 作为用户输入梦想的占位符
+                  使用 <code>{'{dream}'}</code> 作为用户输入梦想的占位符。编辑后点击"添加模板"可保存为新模板。
                 </p>
               </div>
               <button

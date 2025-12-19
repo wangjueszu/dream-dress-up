@@ -80,10 +80,11 @@ body {
   width: 100%;
   min-height: 100vh;
   position: relative;
-  padding: 100px 40px 40px;
+  padding: 40px;
+  padding-top: 250px;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .canvas-hint {
@@ -137,6 +138,33 @@ body {
 
 .film-card.generating {
   cursor: wait;
+}
+
+.film-card.ejecting {
+  cursor: default;
+  z-index: 50;
+  animation: film-fade-in 1s ease-out forwards;
+}
+
+@keyframes film-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.film-card.completed {
+  cursor: grab;
+}
+
+.film-card.completed .film-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .film-image {
@@ -199,11 +227,21 @@ body {
   font-family: 'Comic Sans MS', cursive;
 }
 
-.film-dream {
+.film-name {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: bold;
   color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.film-dream {
+  display: block;
+  font-size: 10px;
+  color: #666;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1448,6 +1486,114 @@ body {
   border-radius: 4px;
   font-family: 'Courier New', monospace;
   font-size: 11px;
+}
+
+/* 模板列表 */
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.template-item:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.template-item.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+.template-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.template-delete {
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.template-item.active .template-delete {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.template-delete:hover {
+  opacity: 1;
+  background: #ef4444;
+  color: white;
+}
+
+.template-add {
+  padding: 10px 14px;
+  background: transparent;
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.template-add:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.05);
+}
+
+/* 添加模板表单 */
+.add-template-field {
+  background: #f9fafb;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.add-template-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn-secondary {
+  padding: 10px 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
 }
 
 /* 详情弹窗 */

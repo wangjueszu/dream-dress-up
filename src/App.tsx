@@ -13,17 +13,27 @@ interface PolaroidPhoto {
   dream: string;
   date: string;
   result?: string;
-  isGenerating?: boolean;
 }
 
-// 弹出照片类型
-interface EjectedPhoto {
+// 待处理照片类型（在相机出口等待）
+interface PendingPhoto {
   id: string;
   photo: string;
   date: string;
-  isEjecting: boolean;
+  name: string;
+  dream: string;
   isGenerating: boolean;
-  result?: string;
+}
+
+// 弹出照片类型（AI生成完成后弹出）
+interface EjectedPhoto {
+  id: string;
+  photo: string;
+  result: string;
+  name: string;
+  dream: string;
+  date: string;
+  isEjecting: boolean;
   isRevealing: boolean;
   position: { x: number; y: number };
   isDragging: boolean;
@@ -47,7 +57,10 @@ function App() {
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 弹出的照片（相机上方）
+  // 待处理的照片（在相机出口等待）
+  const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
+
+  // 弹出的照片（AI生成完成后）
   const [ejectedPhoto, setEjectedPhoto] = useState<EjectedPhoto | null>(null);
 
   // 拍立得照片列表（右侧）
@@ -68,8 +81,6 @@ function App() {
 
   // 编辑弹窗
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editDream, setEditDream] = useState('');
 
   // refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -125,9 +136,9 @@ function App() {
     };
   }, [startCamera]);
 
-  // 拍照 - 照片从相机弹出
+  // 拍照 - 照片进入待处理状态
   const takePhoto = useCallback(() => {
-    if (!videoRef.current || ejectedPhoto) return;
+    if (!videoRef.current || pendingPhoto || ejectedPhoto) return;
 
     const canvas = document.createElement('canvas');
     const video = videoRef.current;
@@ -149,30 +160,24 @@ function App() {
     const now = new Date();
     const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
-    // 创建弹出照片
-    const newEjectedPhoto: EjectedPhoto = {
+    // 创建待处理照片
+    const newPendingPhoto: PendingPhoto = {
       id: Date.now().toString(),
       photo: dataUrl,
       date: dateStr,
-      isEjecting: true,
+      name: '',
+      dream: '',
       isGenerating: false,
-      isRevealing: false,
-      position: { x: 0, y: 0 },
-      isDragging: false,
     };
 
-    setEjectedPhoto(newEjectedPhoto);
-
-    // 弹出动画完成后
-    setTimeout(() => {
-      setEjectedPhoto(prev => prev ? { ...prev, isEjecting: false } : null);
-    }, 800);
-  }, [ejectedPhoto]);
+    setPendingPhoto(newPendingPhoto);
+    setShowEditModal(true);
+  }, [pendingPhoto, ejectedPhoto]);
 
   // 上传照片
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || ejectedPhoto) return;
+    if (!file || pendingPhoto || ejectedPhoto) return;
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -194,42 +199,28 @@ function App() {
         const now = new Date();
         const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
-        // 创建弹出照片
-        const newEjectedPhoto: EjectedPhoto = {
+        // 创建待处理照片
+        const newPendingPhoto: PendingPhoto = {
           id: Date.now().toString(),
           photo: dataUrl,
           date: dateStr,
-          isEjecting: true,
+          name: '',
+          dream: '',
           isGenerating: false,
-          isRevealing: false,
-          position: { x: 0, y: 0 },
-          isDragging: false,
         };
 
-        setEjectedPhoto(newEjectedPhoto);
-
-        setTimeout(() => {
-          setEjectedPhoto(prev => prev ? { ...prev, isEjecting: false } : null);
-        }, 800);
+        setPendingPhoto(newPendingPhoto);
+        setShowEditModal(true);
       };
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
-  }, [ejectedPhoto]);
-
-  // 点击弹出的照片打开编辑弹窗
-  const handleEjectedPhotoClick = () => {
-    if (ejectedPhoto && !ejectedPhoto.isEjecting && !ejectedPhoto.isDragging) {
-      setEditName('');
-      setEditDream('');
-      setShowEditModal(true);
-    }
-  };
+  }, [pendingPhoto, ejectedPhoto]);
 
   // 生成图片
   const handleGenerate = async () => {
-    if (!ejectedPhoto || !editDream.trim()) {
+    if (!pendingPhoto || !pendingPhoto.dream.trim()) {
       setError('请输入梦想');
       return;
     }
@@ -241,52 +232,67 @@ function App() {
     }
 
     setShowEditModal(false);
-    setEjectedPhoto(prev => prev ? { ...prev, isGenerating: true } : null);
+    setPendingPhoto(prev => prev ? { ...prev, isGenerating: true } : null);
     setError(null);
 
     try {
       const config = settingsManager.getConfig();
-      const promptText = generateCustomPrompt(editDream.trim(), config.customPrompt);
-      const response = await generateImage(promptText, { image: ejectedPhoto.photo });
+      const promptText = generateCustomPrompt(pendingPhoto.dream.trim(), config.customPrompt);
+      const response = await generateImage(promptText, { image: pendingPhoto.photo });
 
       if (response.data?.[0]?.url) {
         const imageUrl = response.data[0].url;
 
-        // 显示揭示动画
-        setEjectedPhoto(prev => prev ? {
-          ...prev,
-          isGenerating: false,
-          result: imageUrl,
-          isRevealing: true
-        } : null);
-
-        // 揭示动画完成后
-        setTimeout(() => {
-          setEjectedPhoto(prev => prev ? { ...prev, isRevealing: false } : null);
-        }, 1000);
-
         // 保存到历史记录
         const newItem: HistoryItem = {
           id: Date.now().toString(),
-          name: editName.trim() || '未命名',
-          dream: editDream.trim(),
-          originalPhoto: ejectedPhoto.photo,
+          name: pendingPhoto.name.trim() || '未命名',
+          dream: pendingPhoto.dream.trim(),
+          originalPhoto: pendingPhoto.photo,
           resultPhoto: imageUrl,
           timestamp: Date.now(),
         };
         saveHistory([newItem, ...history].slice(0, 50));
+
+        // 创建弹出照片
+        const newEjectedPhoto: EjectedPhoto = {
+          id: pendingPhoto.id,
+          photo: pendingPhoto.photo,
+          result: imageUrl,
+          name: pendingPhoto.name,
+          dream: pendingPhoto.dream,
+          date: pendingPhoto.date,
+          isEjecting: true,
+          isRevealing: false,
+          position: { x: 0, y: 0 },
+          isDragging: false,
+        };
+
+        setPendingPhoto(null);
+        setEjectedPhoto(newEjectedPhoto);
+
+        // 弹出动画完成后显示揭示效果
+        setTimeout(() => {
+          setEjectedPhoto(prev => prev ? { ...prev, isEjecting: false, isRevealing: true } : null);
+
+          // 揭示动画完成
+          setTimeout(() => {
+            setEjectedPhoto(prev => prev ? { ...prev, isRevealing: false } : null);
+          }, 1000);
+        }, 800);
+
       } else {
         throw new Error('生成失败，请重试');
       }
     } catch (e: any) {
       setError(e.message || '生成失败，请重试');
-      setEjectedPhoto(prev => prev ? { ...prev, isGenerating: false } : null);
+      setPendingPhoto(prev => prev ? { ...prev, isGenerating: false } : null);
     }
   };
 
   // 拖拽开始
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!ejectedPhoto || ejectedPhoto.isEjecting || ejectedPhoto.isGenerating) return;
+    if (!ejectedPhoto || ejectedPhoto.isEjecting || ejectedPhoto.isRevealing) return;
 
     e.preventDefault();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -335,16 +341,14 @@ function App() {
         const newPolaroid: PolaroidPhoto = {
           id: ejectedPhoto.id,
           photo: ejectedPhoto.photo,
-          name: editName.trim() || '',
-          dream: editDream.trim() || '',
+          name: ejectedPhoto.name,
+          dream: ejectedPhoto.dream,
           date: ejectedPhoto.date,
           result: ejectedPhoto.result,
         };
 
         setPolaroids(prev => [newPolaroid, ...prev].slice(0, 6));
         setEjectedPhoto(null);
-        setEditName('');
-        setEditDream('');
       } else {
         // 弹回原位
         setEjectedPhoto(prev => prev ? {
@@ -356,7 +360,7 @@ function App() {
     }
 
     dragRef.current = null;
-  }, [ejectedPhoto, editName, editDream]);
+  }, [ejectedPhoto]);
 
   // 监听全局拖拽事件
   useEffect(() => {
@@ -375,11 +379,15 @@ function App() {
     }
   }, [ejectedPhoto?.isDragging, handleDragMove, handleDragEnd]);
 
+  // 取消待处理照片
+  const cancelPendingPhoto = () => {
+    setPendingPhoto(null);
+    setShowEditModal(false);
+  };
+
   // 取消弹出的照片
   const cancelEjectedPhoto = () => {
     setEjectedPhoto(null);
-    setEditName('');
-    setEditDream('');
   };
 
   // 删除拍立得
@@ -415,7 +423,7 @@ function App() {
     setShowSettings(false);
 
     // 如果有待生成的照片，继续生成
-    if (ejectedPhoto && editDream.trim() && tempApiKey.trim()) {
+    if (pendingPhoto && pendingPhoto.dream.trim() && tempApiKey.trim()) {
       handleGenerate();
     }
   };
@@ -441,47 +449,35 @@ function App() {
       <main className="main-area">
         {/* 左侧相机区域 */}
         <div className="camera-section" ref={cameraRef}>
-          {/* 弹出的照片 */}
+          {/* AI生成完成后弹出的照片 */}
           {ejectedPhoto && (
             <div
-              className={`ejected-photo ${ejectedPhoto.isEjecting ? 'ejecting' : ''} ${ejectedPhoto.isGenerating ? 'generating' : ''} ${ejectedPhoto.isRevealing ? 'revealing' : ''} ${ejectedPhoto.isDragging ? 'dragging' : ''} ${ejectedPhoto.result ? 'has-result' : ''}`}
+              className={`ejected-photo ${ejectedPhoto.isEjecting ? 'ejecting' : ''} ${ejectedPhoto.isRevealing ? 'revealing' : ''} ${ejectedPhoto.isDragging ? 'dragging' : ''}`}
               style={{
                 transform: `translate(${ejectedPhoto.position.x}px, ${ejectedPhoto.position.y}px)`,
               }}
               onMouseDown={handleDragStart}
               onTouchStart={handleDragStart}
-              onClick={handleEjectedPhotoClick}
             >
               <div className="ejected-photo-inner">
-                {/* 原始照片 */}
-                <div className={`ejected-photo-original ${ejectedPhoto.result ? 'hidden' : ''}`}>
-                  <img src={ejectedPhoto.photo} alt="照片" />
+                {/* 原始照片（底层） */}
+                <div className="ejected-photo-original">
+                  <img src={ejectedPhoto.photo} alt="原照片" />
                 </div>
-                {/* AI生成结果 */}
-                {ejectedPhoto.result && (
-                  <div className={`ejected-photo-result ${ejectedPhoto.isRevealing ? 'revealing' : ''}`}>
-                    <img src={ejectedPhoto.result} alt="AI生成" />
-                  </div>
-                )}
-                {/* 生成中指示器 */}
-                {ejectedPhoto.isGenerating && (
-                  <div className="ejected-photo-loading">
-                    <div className="spinner-small"></div>
-                    <span>AI生成中...</span>
-                  </div>
-                )}
+                {/* AI生成结果（上层，带揭示动画） */}
+                <div className={`ejected-photo-result ${ejectedPhoto.isRevealing ? 'revealing' : ''}`}>
+                  <img src={ejectedPhoto.result} alt="AI生成" />
+                </div>
               </div>
               <div className="ejected-photo-info">
+                <span className="ejected-photo-dream">{ejectedPhoto.dream}</span>
                 <span className="ejected-photo-date">{ejectedPhoto.date}</span>
-                {!ejectedPhoto.isGenerating && !ejectedPhoto.result && (
-                  <span className="ejected-photo-hint">点击编辑</span>
-                )}
-                {ejectedPhoto.result && (
-                  <span className="ejected-photo-hint">拖动到右侧</span>
+                {!ejectedPhoto.isEjecting && !ejectedPhoto.isRevealing && (
+                  <span className="ejected-photo-hint">← 拖动到右侧保存</span>
                 )}
               </div>
               {/* 取消按钮 */}
-              {!ejectedPhoto.isGenerating && (
+              {!ejectedPhoto.isEjecting && !ejectedPhoto.isRevealing && (
                 <button
                   className="ejected-photo-cancel"
                   onClick={(e) => {
@@ -527,7 +523,7 @@ function App() {
             <button
               className="camera-shutter"
               onClick={takePhoto}
-              disabled={!!ejectedPhoto}
+              disabled={!!pendingPhoto || !!ejectedPhoto}
             >
               <div className="shutter-inner"></div>
             </button>
@@ -536,13 +532,24 @@ function App() {
             <button
               className="camera-upload"
               onClick={() => fileInputRef.current?.click()}
-              disabled={!!ejectedPhoto}
+              disabled={!!pendingPhoto || !!ejectedPhoto}
             >
               📁
             </button>
 
-            {/* 照片出口 */}
-            <div className="camera-output"></div>
+            {/* 照片出口 - 显示待处理状态 */}
+            <div className={`camera-output ${pendingPhoto ? 'has-photo' : ''}`}>
+              {pendingPhoto && (
+                <div className={`output-photo-preview ${pendingPhoto.isGenerating ? 'generating' : ''}`}>
+                  <img src={pendingPhoto.photo} alt="待处理" />
+                  {pendingPhoto.isGenerating && (
+                    <div className="output-photo-loading">
+                      <div className="spinner-tiny"></div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -552,7 +559,7 @@ function App() {
             {polaroids.length === 0 ? (
               <div className="polaroids-empty">
                 <span>📸</span>
-                <p>拍照后拖动照片到此处</p>
+                <p>拍照生成后拖动到此处</p>
               </div>
             ) : (
               polaroids.map((polaroid, index) => (
@@ -608,27 +615,27 @@ function App() {
         </div>
       )}
 
-      {/* 编辑弹窗 */}
-      {showEditModal && ejectedPhoto && (
-        <div className="polaroid-modal" onClick={() => setShowEditModal(false)}>
+      {/* 编辑弹窗 - 输入梦想并生成 */}
+      {showEditModal && pendingPhoto && (
+        <div className="polaroid-modal" onClick={cancelPendingPhoto}>
           <div className="polaroid-modal-content" onClick={e => e.stopPropagation()}>
-            <button className="btn-close" onClick={() => setShowEditModal(false)}>✕</button>
+            <button className="btn-close" onClick={cancelPendingPhoto}>✕</button>
 
             <div className="polaroid-preview">
-              <img src={ejectedPhoto.photo} alt="照片" />
+              <img src={pendingPhoto.photo} alt="照片" />
             </div>
 
             <div className="polaroid-form">
               <input
                 type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                value={pendingPhoto.name}
+                onChange={(e) => setPendingPhoto(prev => prev ? { ...prev, name: e.target.value } : null)}
                 placeholder="输入姓名（可选）"
                 className="input-name"
               />
               <textarea
-                value={editDream}
-                onChange={(e) => setEditDream(e.target.value)}
+                value={pendingPhoto.dream}
+                onChange={(e) => setPendingPhoto(prev => prev ? { ...prev, dream: e.target.value } : null)}
                 placeholder="输入你的梦想..."
                 className="input-dream"
                 rows={2}
@@ -637,9 +644,9 @@ function App() {
                 <button
                   className="btn-primary"
                   onClick={handleGenerate}
-                  disabled={!editDream.trim()}
+                  disabled={!pendingPhoto.dream.trim() || pendingPhoto.isGenerating}
                 >
-                  开始变装 ✨
+                  {pendingPhoto.isGenerating ? '生成中...' : '开始变装 ✨'}
                 </button>
               </div>
             </div>

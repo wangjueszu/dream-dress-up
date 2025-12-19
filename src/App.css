@@ -517,112 +517,37 @@ body {
   min-height: 500px;
 }
 
-/* 相机主体 */
-.camera-body {
+/* ===== 拍立得相机（使用图片）===== */
+.camera-wrapper {
   position: relative;
-  width: 420px;
-  height: 480px;
-  background: linear-gradient(145deg, #f5f0e6 0%, #e8dcc8 100%);
-  border-radius: 40px;
-  box-shadow:
-    0 30px 80px rgba(0,0,0,0.35),
-    inset 0 3px 0 rgba(255,255,255,0.5),
-    inset 0 -3px 0 rgba(0,0,0,0.1);
+  width: 350px;
+  height: 350px;
   flex-shrink: 0;
 }
 
-/* 闪光灯 */
-.camera-flash {
+/* 相机图片 */
+.camera-image {
   position: absolute;
-  top: 30px;
-  left: 35px;
-  width: 70px;
-  height: 55px;
-  background: linear-gradient(145deg, #888 0%, #555 100%);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 3px 6px rgba(255,255,255,0.3),
-    inset 0 -3px 6px rgba(0,0,0,0.3);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 4;
+  pointer-events: none;
 }
 
-.camera-flash::after {
-  content: '';
+/* 摄像头视频容器 - 定位在透明镜头位置 */
+.camera-video-container {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
-  background: linear-gradient(145deg, #bbb 0%, #777 100%);
-  border-radius: 4px;
-}
-
-/* 取景器 */
-.camera-viewfinder {
-  position: absolute;
-  top: 38px;
-  left: 125px;
-  width: 40px;
-  height: 35px;
-  background: #222;
-  border-radius: 5px;
-  box-shadow: inset 0 3px 6px rgba(0,0,0,0.5);
-}
-
-/* 小镜头 */
-.camera-small-lens {
-  position: absolute;
-  top: 40px;
-  right: 100px;
-  width: 28px;
-  height: 28px;
-  background: radial-gradient(circle at 30% 30%, #555, #222);
-  border-radius: 50%;
-  box-shadow:
-    0 3px 6px rgba(0,0,0,0.3),
-    inset 0 2px 3px rgba(255,255,255,0.2);
-}
-
-.camera-small-lens::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 8px;
-  height: 8px;
-  background: radial-gradient(circle, rgba(255,255,255,0.8), transparent);
-  border-radius: 50%;
-}
-
-/* 主镜头外圈 */
-.camera-lens-outer {
-  position: absolute;
-  top: 110px;
+  top: 10%;
   left: 50%;
   transform: translateX(-50%);
-  width: 280px;
-  height: 280px;
-  background: linear-gradient(145deg, #f8e8e0 0%, #e0c8b8 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.2),
-    inset 0 3px 6px rgba(255,255,255,0.5),
-    inset 0 -3px 6px rgba(0,0,0,0.1);
-}
-
-/* 主镜头内圈 */
-.camera-lens-inner {
-  width: 230px;
-  height: 230px;
-  background: linear-gradient(145deg, #444 0%, #222 100%);
-  border-radius: 50%;
+  width: 50%;
+  height: 50%;
   overflow: hidden;
-  position: relative;
-  box-shadow:
-    inset 0 6px 30px rgba(0,0,0,0.8),
-    0 3px 6px rgba(0,0,0,0.3);
+  z-index: 3;
+  background: #1a1a1a;
 }
 
 /* 镜头内的视频 */
@@ -642,86 +567,142 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #333;
-  font-size: 40px;
+  background: #222;
+  font-size: 32px;
 }
 
-/* 快门按钮 */
+/* 拍照按钮 - 相机顶部左上角，像真正的快门 */
 .camera-shutter {
   position: absolute;
-  bottom: 45px;
-  left: 50px;
-  width: 75px;
-  height: 75px;
-  background: linear-gradient(145deg, #d4a574 0%, #b8956a 100%);
+  top: 8%;
+  left: 12%;
+  width: 32px;
+  height: 14px;
+  background: linear-gradient(180deg, #e85050 0%, #c43c3c 100%);
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 6px 15px rgba(0,0,0,0.3),
-    inset 0 3px 6px rgba(255,255,255,0.3);
-  transition: all 0.1s ease;
-}
-
-.camera-shutter:hover {
-  transform: scale(1.05);
-}
-
-.camera-shutter:active {
-  transform: scale(0.95);
+  z-index: 10;
   box-shadow:
     0 3px 8px rgba(0,0,0,0.3),
-    inset 0 3px 6px rgba(0,0,0,0.2);
-}
-
-.shutter-inner {
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(145deg, #c49868 0%, #a8855c 100%);
-  border-radius: 50%;
-  border: 4px solid rgba(255,255,255,0.3);
-}
-
-/* 上传按钮 */
-.camera-upload {
-  position: absolute;
-  bottom: 50px;
-  right: 50px;
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(145deg, #888 0%, #666 100%);
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 24px;
-  box-shadow:
-    0 6px 15px rgba(0,0,0,0.3),
-    inset 0 3px 6px rgba(255,255,255,0.2);
+    inset 0 2px 3px rgba(255,255,255,0.3),
+    inset 0 -2px 3px rgba(0,0,0,0.2);
   transition: all 0.1s ease;
 }
 
-.camera-upload:hover {
-  transform: scale(1.05);
+.camera-shutter::after {
+  display: none;
 }
 
-.camera-upload:active {
-  transform: scale(0.95);
+.camera-shutter:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f06060 0%, #d44545 100%);
+  box-shadow:
+    0 4px 10px rgba(0,0,0,0.4),
+    inset 0 2px 3px rgba(255,255,255,0.3);
 }
 
-/* 照片出口 */
-.camera-output {
+.camera-shutter:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 4px rgba(0,0,0,0.3),
+    inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.camera-shutter:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 上传按钮 - 底部彩虹出口位置，透明热区 */
+.camera-upload {
   position: absolute;
-  top: -10px;
+  bottom: 11%;
   left: 50%;
   transform: translateX(-50%);
-  width: 100px;
+  width: 140px;
   height: 20px;
-  background: linear-gradient(to bottom, #555 0%, #777 100%);
-  border-radius: 3px 3px 0 0;
-  z-index: 5;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.camera-upload:disabled {
+  cursor: not-allowed;
+}
+
+/* 正在弹出的胶片（从相机顶部升起） */
+.ejecting-film {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -80px;
+  width: 160px;
+  background: white;
+  padding: 10px 10px 45px 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  z-index: 1;
+  transition: transform 0.05s linear;
+}
+
+.ejecting-film .film-image {
+  width: 140px;
+  height: 140px;
+  position: relative;
+  overflow: hidden;
+  background: #111;
+}
+
+.ejecting-film .film-photo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.ejecting-film .film-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ejecting-film .film-black {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #1a1a1a 0%, #0a0a0a 100%);
+  z-index: 2;
+  transition: opacity 0.1s ease;
+}
+
+.ejecting-film .film-info {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  text-align: center;
+  font-family: 'Comic Sans MS', cursive;
+}
+
+.ejecting-film .film-dream {
+  display: block;
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.ejecting-film .film-date {
+  display: block;
+  font-size: 10px;
+  color: #666;
 }
 
 /* 待处理照片预览（在相机上方，大部分露出，底部小部分在出口内） */
@@ -1707,61 +1688,24 @@ body {
 }
 
 @media (max-width: 600px) {
-  .camera-body {
-    width: 320px;
-    height: 380px;
-  }
-
-  .camera-flash {
-    width: 55px;
-    height: 45px;
-    top: 25px;
-    left: 30px;
-  }
-
-  .camera-viewfinder {
-    top: 32px;
-    left: 100px;
-    width: 32px;
-    height: 28px;
-  }
-
-  .camera-small-lens {
-    top: 34px;
-    right: 80px;
-    width: 22px;
-    height: 22px;
-  }
-
-  .camera-lens-outer {
-    top: 90px;
-    width: 210px;
-    height: 210px;
-  }
-
-  .camera-lens-inner {
-    width: 170px;
-    height: 170px;
+  .camera-wrapper {
+    width: 280px;
+    height: 280px;
   }
 
   .camera-shutter {
-    width: 60px;
-    height: 60px;
-    bottom: 35px;
-    left: 40px;
-  }
-
-  .shutter-inner {
     width: 40px;
     height: 40px;
   }
 
+  .camera-shutter::after {
+    width: 22px;
+    height: 22px;
+  }
+
   .camera-upload {
-    width: 48px;
-    height: 48px;
-    bottom: 40px;
-    right: 40px;
-    font-size: 18px;
+    width: 50px;
+    height: 65px;
   }
 
   .polaroid {

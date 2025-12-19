@@ -256,10 +256,10 @@ function App() {
     setEditDream('');
     setError(null);
 
-    // 胶片缓慢出现动画（渐入效果）
+    // 胶片缓慢出现动画（渐入效果）- 更慢的速度
     let ejectProgress = 0;
     const ejectInterval = setInterval(() => {
-      ejectProgress += 3;
+      ejectProgress += 1; // 更慢的增量
       setFilms(prev => prev.map(f =>
         f.id === filmId
           ? { ...f, ejectProgress: Math.min(ejectProgress, 100) }
@@ -274,7 +274,7 @@ function App() {
             : f
         ));
       }
-    }, 30);
+    }, 50); // 更长的间隔
 
     // 开始AI生成
     try {
@@ -292,10 +292,10 @@ function App() {
             : f
         ));
 
-        // 显影动画（逐渐显示）
+        // 显影动画（逐渐显示）- 更慢的速度
         let progress = 0;
         const developInterval = setInterval(() => {
-          progress += 2;
+          progress += 1; // 更慢的增量
           setFilms(prev => {
             const updated = prev.map(f =>
               f.id === filmId
@@ -330,7 +330,7 @@ function App() {
             }
             return updated;
           });
-        }, 50);
+        }, 80); // 更长的间隔
 
       } else {
         throw new Error('生成失败，请重试');
@@ -606,91 +606,73 @@ function App() {
       <main className="canvas-area" ref={canvasRef}>
         {/* 相机 */}
         <div className="camera-section">
-          <div className="camera-body">
-            <div className="camera-flash"></div>
-            <div className="camera-viewfinder"></div>
-            <div className="camera-small-lens"></div>
-
-            <div className="camera-lens-outer">
-              <div className="camera-lens-inner">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="camera-video"
-                />
-                {!cameraReady && (
-                  <div className="camera-placeholder"></div>
-                )}
+          <div className="camera-wrapper">
+            {/* 正在弹出的胶片（在相机图片下方，从顶部升起） */}
+            {films.filter(f => f.isEjecting || f.isGenerating || f.isDeveloping).map((film) => (
+              <div
+                key={film.id}
+                className={`ejecting-film ${film.isDragging ? 'dragging' : ''}`}
+                style={{
+                  transform: `translateY(${100 - film.ejectProgress}%)`,
+                }}
+                onMouseDown={(e) => handleDragStart(e, film.id)}
+                onTouchStart={(e) => handleDragStart(e, film.id)}
+              >
+                <div className="film-image">
+                  {/* 结果照片在底层 */}
+                  {film.result && (
+                    <div className="film-photo">
+                      <img src={film.result} alt="照片" />
+                    </div>
+                  )}
+                  {/* 黑色胶片在上层，逐渐变透明 */}
+                  <div
+                    className="film-black"
+                    style={{ opacity: film.isDeveloping ? 1 - (film.developProgress / 100) : 1 }}
+                  ></div>
+                </div>
+                <div className="film-info">
+                  <span className="film-dream">{film.dream}</span>
+                  <span className="film-date">{film.date}</span>
+                </div>
               </div>
+            ))}
+
+            {/* 摄像头视频（在相机图片下方，透过镜头显示） */}
+            <div className="camera-video-container">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="camera-video"
+              />
+              {!cameraReady && (
+                <div className="camera-placeholder">📷</div>
+              )}
             </div>
 
+            {/* 相机图片 */}
+            <img src="/camera.png" alt="相机" className="camera-image" />
+
+            {/* 拍照按钮 - 右上角，模拟快门 */}
             <button
               className="camera-shutter"
               onClick={takePhoto}
               disabled={!!capturedPhoto}
-            >
-              <div className="shutter-inner"></div>
-            </button>
+              title="拍照"
+            />
 
+            {/* 上传按钮 - 底部出口位置，透明热区 */}
             <button
               className="camera-upload"
               onClick={() => fileInputRef.current?.click()}
               disabled={!!capturedPhoto}
-            >
-              📁
-            </button>
-
-            <div className="camera-output"></div>
+              title="上传照片"
+            />
           </div>
         </div>
 
-        {/* 画板上的胶片/照片 */}
-        {films.map((film) => (
-          <div
-            key={film.id}
-            className={`film-card ${film.isDragging ? 'dragging' : ''} ${film.isGenerating ? 'generating' : ''} ${film.isDeveloping ? 'developing' : ''} ${film.isEjecting ? 'ejecting' : ''}`}
-            style={{
-              left: film.position.x,
-              top: film.position.y,
-            }}
-            onMouseDown={(e) => !film.isEjecting && handleDragStart(e, film.id)}
-            onTouchStart={(e) => !film.isEjecting && handleDragStart(e, film.id)}
-          >
-            <div className="film-image">
-              {/* 黑色胶片底层 */}
-              <div className="film-black"></div>
-
-              {/* 显影中的照片 */}
-              {film.result && (
-                <div
-                  className="film-photo"
-                  style={{ opacity: film.developProgress / 100 }}
-                >
-                  <img src={film.result} alt="照片" />
-                </div>
-              )}
-
-            </div>
-            <div className="film-info">
-              <span className="film-dream">{film.dream}</span>
-              <span className="film-date">{film.date}</span>
-            </div>
-            {/* 删除按钮 */}
-            {!film.isGenerating && (
-              <button
-                className="film-delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteFilm(film.id);
-                }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
 
         {/* 画板上的历史照片 */}
         {history.map((item) => (

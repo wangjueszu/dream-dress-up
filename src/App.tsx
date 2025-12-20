@@ -415,11 +415,17 @@ function App() {
   };
 
   // 取消拍照
-  const cancelCapture = () => {
+  const cancelCapture = useCallback(() => {
     setCapturedPhoto(null);
     setEditName('');
     setEditDream('');
-  };
+    // 重新连接摄像头
+    setTimeout(() => {
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+    }, 50);
+  }, []);
 
   // 拖拽开始
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent, filmId: string) => {
@@ -505,11 +511,6 @@ function App() {
       };
     }
   }, [films, handleDragMove, handleDragEnd]);
-
-  // 删除胶片
-  const deleteFilm = (id: string) => {
-    setFilms(prev => prev.filter(f => f.id !== id));
-  };
 
   // 保存历史记录
   const saveHistory = useCallback((items: HistoryItem[]) => {

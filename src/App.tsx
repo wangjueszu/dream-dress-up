@@ -167,7 +167,7 @@ function App() {
   // 触发闪光效果
   const triggerFlash = useCallback(() => {
     setShowFlash(true);
-    setTimeout(() => setShowFlash(false), 150);
+    setTimeout(() => setShowFlash(false), 250);
   }, []);
 
   // 拍照 - 只捕获照片，弹窗确认
@@ -758,7 +758,10 @@ function App() {
               </div>
             )}
 
-            {/* 闪光效果 */}
+            {/* 相机闪光灯 */}
+            {showFlash && <div className="camera-flashlight" />}
+
+            {/* 全屏闪光效果 */}
             {showFlash && <div className="camera-flash" />}
           </div>
 

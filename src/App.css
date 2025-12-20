@@ -13,8 +13,6 @@ html, body, #root {
 body {
   font-family: 'Comic Sans MS', 'Chalkboard', cursive, sans-serif;
   background: #e8e8e8;
-  background-image: radial-gradient(circle, #d0d0d0 1px, transparent 1px);
-  background-size: 20px 20px;
 }
 
 .app {
@@ -718,7 +716,40 @@ body {
   pointer-events: none;
 }
 
-/* 闪光效果 */
+/* 相机闪光灯 - 在相机上的发光效果 */
+.camera-flashlight {
+  position: absolute;
+  top: 24%;
+  right: 15%;
+  width: 30px;
+  height: 30px;
+  background: radial-gradient(circle, #fff 0%, #fff 30%, rgba(255, 255, 255, 0) 70%);
+  border-radius: 50%;
+  z-index: 100;
+  animation: flashlight-glow 0.25s ease-out forwards;
+  pointer-events: none;
+  box-shadow:
+    0 0 20px 10px rgba(255, 255, 255, 0.9),
+    0 0 40px 20px rgba(255, 255, 255, 0.6),
+    0 0 60px 30px rgba(255, 255, 255, 0.3);
+}
+
+@keyframes flashlight-glow {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* 全屏闪光效果 */
 .camera-flash {
   position: fixed;
   top: 0;
@@ -727,16 +758,16 @@ body {
   height: 100vh;
   background: white;
   z-index: 9999;
-  animation: flash-effect 0.2s ease-out forwards;
+  animation: flash-effect 0.25s ease-out forwards;
   pointer-events: none;
 }
 
 @keyframes flash-effect {
   0% {
-    opacity: 0.9;
+    opacity: 0.85;
   }
-  50% {
-    opacity: 0.6;
+  40% {
+    opacity: 0.5;
   }
   100% {
     opacity: 0;

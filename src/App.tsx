@@ -305,34 +305,12 @@ function App() {
             if (hasAddedToHistory) return;
             hasAddedToHistory = true;
 
-            // 先获取胶片信息
-            setFilms(prev => {
-              const completedFilm = prev.find(f => f.id === filmId);
-              // 移除已完成的胶片
-              return prev.filter(f => f.id !== filmId);
-            });
-
-            // 添加到历史记录（在 setFilms 外面，避免重复）
-            setTimeout(() => {
-              setHistory(prevHistory => {
-                // 再次检查是否已存在（防止重复）
-                if (prevHistory.some(h => h.originalPhoto === newFilm.originalPhoto && h.dream === newFilm.dream)) {
-                  return prevHistory;
-                }
-                const newItem: HistoryItem = {
-                  id: Date.now().toString(),
-                  name: newFilm.name || '未命名',
-                  dream: newFilm.dream,
-                  originalPhoto: newFilm.originalPhoto,
-                  resultPhoto: imageUrl,
-                  timestamp: Date.now(),
-                  position: newFilm.position,
-                };
-                const newHistory = [newItem, ...prevHistory].slice(0, 50);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
-                return newHistory;
-              });
-            }, 50);
+            // 标记显影完成，不再是 isDeveloping 状态
+            setFilms(prev => prev.map(f =>
+              f.id === filmId
+                ? { ...f, isDeveloping: false, developProgress: 100 }
+                : f
+            ));
           } else {
             // 更新显影进度
             setFilms(prev => prev.map(f =>
@@ -651,10 +629,10 @@ function App() {
                       <img src={film.result} alt="照片" />
                     </div>
                   )}
-                  {/* 黑色胶片在上层，逐渐变透明 */}
+                  {/* 黑色胶片在上层：没有结果时全黑，有结果后逐渐透明 */}
                   <div
                     className="film-black"
-                    style={{ opacity: film.isDeveloping ? 1 - (film.developProgress / 100) : 1 }}
+                    style={{ opacity: !film.result ? 1 : 1 - (film.developProgress / 100) }}
                   ></div>
                 </div>
                 <div className="film-info">
@@ -699,37 +677,77 @@ function App() {
           </div>
         </div>
 
-        {/* 正在拖拽的胶片（脱离相机，在画板上绝对定位） */}
-        {films.filter(f => f.isDragging).map((film) => (
-          <div
-            key={film.id}
-            className="film-card dragging"
-            style={{
-              left: film.position.x,
-              top: film.position.y,
-            }}
-            onMouseDown={(e) => handleDragStart(e, film.id)}
-            onTouchStart={(e) => handleDragStart(e, film.id)}
-          >
-            <div className="film-image">
-              {/* 结果照片在底层 */}
-              {film.result && (
-                <div className="film-photo">
-                  <img src={film.result} alt="照片" />
-                </div>
-              )}
-              {/* 黑色胶片在上层，逐渐变透明 */}
-              <div
-                className="film-black"
-                style={{ opacity: film.isDeveloping ? 1 - (film.developProgress / 100) : 1 }}
-              ></div>
+        {/* 画板上的胶片（拖拽中的 或 已完成显影的） */}
+        {films.filter(f => f.isDragging || (!f.isEjecting && !f.isGenerating && !f.isDeveloping)).map((film) => {
+          // 计算黑胶透明度：
+          // - 没有结果时（生成中）：全黑 (1)
+          // - 有结果且在显影中：逐渐透明
+          // - 显影完成：完全透明 (0)
+          const blackOpacity = !film.result
+            ? 1
+            : (film.developProgress >= 100 ? 0 : 1 - (film.developProgress / 100));
+
+          return (
+            <div
+              key={film.id}
+              className={`film-card ${film.isDragging ? 'dragging' : ''} ${film.developProgress >= 100 ? 'completed' : ''}`}
+              style={{
+                left: film.position.x,
+                top: film.position.y,
+              }}
+              onMouseDown={(e) => handleDragStart(e, film.id)}
+              onTouchStart={(e) => handleDragStart(e, film.id)}
+            >
+              <div className="film-image">
+                {/* 结果照片在底层 */}
+                {film.result && (
+                  <div className="film-photo">
+                    <img src={film.result} alt="照片" />
+                  </div>
+                )}
+                {/* 黑色胶片在上层，逐渐变透明 */}
+                {blackOpacity > 0 && (
+                  <div
+                    className="film-black"
+                    style={{ opacity: blackOpacity }}
+                  ></div>
+                )}
+              </div>
+              <div className="film-info">
+                <span className="film-dream">{film.dream}</span>
+                <span className="film-date">{film.date}</span>
+              </div>
+              <button
+                className="film-delete"
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // 如果已完成，保存到历史再删除
+                  if (film.developProgress >= 100 && film.result) {
+                    const newItem: HistoryItem = {
+                      id: Date.now().toString(),
+                      name: film.name || '未命名',
+                      dream: film.dream,
+                      originalPhoto: film.originalPhoto,
+                      resultPhoto: film.result,
+                      timestamp: Date.now(),
+                      position: film.position,
+                    };
+                    setHistory(prev => {
+                      const newHistory = [newItem, ...prev].slice(0, 50);
+                      localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+                      return newHistory;
+                    });
+                  }
+                  deleteFilm(film.id);
+                }}
+              >
+                ✕
+              </button>
             </div>
-            <div className="film-info">
-              <span className="film-dream">{film.dream}</span>
-              <span className="film-date">{film.date}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* 画板上的历史照片 */}
         {history.map((item) => (

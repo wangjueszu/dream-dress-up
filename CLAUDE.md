@@ -32,7 +32,8 @@ src/
 ├── services/
 │   ├── settings.ts         # 设置管理器（localStorage + URL 参数）
 │   ├── image-api.ts        # AI 图像生成 API 调用
-│   └── sound.ts            # 音效服务（Web Audio API 合成）
+│   ├── sound.ts            # 音效服务（Web Audio API 合成）
+│   └── share.ts            # 分享服务（生成分享卡片、系统分享）
 └── constants/dreams.ts     # 提示词模板定义
 ```
 
@@ -75,3 +76,10 @@ shutter.mp3, upload.mp3, cameraOn.mp3, cameraOff.mp3, confirm.mp3,
 complete.mp3, error.mp3, eject.mp3, developing.mp3, click.mp3
 ```
 支持格式：mp3、wav、ogg。有自定义文件时优先使用，否则用合成音效。
+
+### 分享功能
+
+- 点击照片查看大图，底部有「分享」按钮
+- 生成精美分享卡片（Canvas 绘制），包含：变装照片、梦想描述、日期、网站水印
+- 支持 Web Share API（移动端系统分享）和下载图片
+- 主要 API：`generateShareCard()`, `shareImage()`, `downloadImage()`

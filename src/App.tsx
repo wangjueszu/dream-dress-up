@@ -128,6 +128,7 @@ function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const developingCountRef = useRef(0); // 跟踪正在显影的照片数量
+  const addedHistoryIdsRef = useRef<Set<string>>(new Set()); // 防止重复添加到历史记录
 
   // 加载历史记录和设置
   useEffect(() => {
@@ -527,7 +528,6 @@ function App() {
 
         // 显影动画（逐渐显示）
         let progress = 0;
-        let hasAddedToHistory = false;
         const developInterval = setInterval(() => {
           progress += 1;
 
@@ -541,8 +541,9 @@ function App() {
             }
             playSound('complete');
 
-            if (hasAddedToHistory) return;
-            hasAddedToHistory = true;
+            // 使用 ref 防止重复添加（React 并发模式可能多次调用 setState 回调）
+            if (addedHistoryIdsRef.current.has(filmId)) return;
+            addedHistoryIdsRef.current.add(filmId);
 
             const filmElement = document.querySelector(`[data-film-id="${filmId}"]`);
             const canvasElement = canvasRef.current;
@@ -566,7 +567,7 @@ function App() {
                     : actualPosition;
 
                 const newItem: HistoryItem = {
-                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                  id: filmId + '-history', // 使用 filmId 确保唯一性
                   name: completedFilm.name || '',
                   dream: completedFilm.dream,
                   originalPhoto: completedFilm.originalPhoto,
@@ -574,13 +575,18 @@ function App() {
                   timestamp: Date.now(),
                   position: finalPosition,
                 };
-                setTimeout(() => {
+                // 使用 queueMicrotask 避免在 setState 回调内嵌套 setState
+                queueMicrotask(() => {
                   setHistory(prevHistory => {
+                    // 再次检查防止重复
+                    if (prevHistory.some(h => h.id === newItem.id)) {
+                      return prevHistory;
+                    }
                     const newHistory = [newItem, ...prevHistory].slice(0, 50);
                     localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
                     return newHistory;
                   });
-                }, 50);
+                });
               }
               return prev.filter(f => f.id !== filmId);
             });
@@ -718,7 +724,6 @@ function App() {
 
         // 显影动画
         let progress = 0;
-        let hasAddedToHistory = false;
         const developInterval = setInterval(() => {
           progress += 1;
 
@@ -732,14 +737,15 @@ function App() {
             }
             playSound('complete');
 
-            if (hasAddedToHistory) return;
-            hasAddedToHistory = true;
+            // 使用 ref 防止重复添加
+            if (addedHistoryIdsRef.current.has(filmId)) return;
+            addedHistoryIdsRef.current.add(filmId);
 
             setFilms(prev => {
               const completedFilm = prev.find(f => f.id === filmId);
               if (completedFilm) {
                 const newItem: HistoryItem = {
-                  id: Date.now().toString(),
+                  id: filmId + '-history',
                   name: completedFilm.name || '',
                   dream: completedFilm.dream,
                   originalPhoto: completedFilm.originalPhoto,
@@ -747,16 +753,16 @@ function App() {
                   timestamp: Date.now(),
                   position: completedFilm.position,
                 };
-                setTimeout(() => {
+                queueMicrotask(() => {
                   setHistory(prevHistory => {
-                    if (prevHistory.some(h => h.originalPhoto === newItem.originalPhoto && h.dream === newItem.dream)) {
+                    if (prevHistory.some(h => h.id === newItem.id)) {
                       return prevHistory;
                     }
                     const newHistory = [newItem, ...prevHistory].slice(0, 50);
                     localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
                     return newHistory;
                   });
-                }, 50);
+                });
               }
               return prev.filter(f => f.id !== filmId);
             });

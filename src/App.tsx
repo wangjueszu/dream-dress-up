@@ -1510,10 +1510,9 @@ function App() {
                 </span>
               </div>
             )}
-          </div>
 
-          {/* 右侧 - 生成的照片从这里滑出 */}
-          <div className="side-result">
+            {/* 右侧 - 生成的照片从这里滑出（在 camera-wrapper 内部，跟随相机移动） */}
+            <div className="side-result">
             {films.filter(f => (f.isEjecting || f.isGenerating || f.isDeveloping || f.isFailed) && !f.isDragging).map((film) => (
               <div
                 key={film.id}
@@ -1580,6 +1579,7 @@ function App() {
                 )}
               </div>
             ))}
+            </div>
           </div>
         </div>
 

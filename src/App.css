@@ -91,6 +91,37 @@ body {
   box-shadow: 0 0 0 var(--border-strong);
 }
 
+/* GALLERY 按钮 - 拖拽收纳状态 */
+.history-btn.drop-target {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.history-btn.drop-hover {
+  background: #3b82f6;
+  border-color: #1d4ed8;
+  color: white;
+  transform: scale(1.05);
+}
+
+/* GALLERY 角标 */
+.gallery-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  background: #ef4444;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
 /* 主区域 - 左右布局 */
 .main-area {
   width: 100%;
@@ -309,6 +340,36 @@ body {
 
 .film-delete:hover {
   background: #ef4444;
+}
+
+/* 收纳按钮 */
+.film-collect {
+  position: absolute;
+  top: 5px;
+  right: 32px;
+  width: 22px;
+  height: 22px;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.film-card:hover .film-collect {
+  opacity: 1;
+}
+
+.film-collect:hover {
+  background: #3b82f6;
+  transform: scale(1.1);
 }
 
 /* 相机区域 */
@@ -1847,6 +1908,49 @@ body {
 
 .gallery-polaroid-delete:hover {
   background: #ef4444;
+}
+
+/* 放回画板按钮 */
+.gallery-polaroid-restore {
+  position: absolute;
+  top: 15px;
+  right: 38px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-polaroid:hover .gallery-polaroid-restore {
+  opacity: 1;
+}
+
+.gallery-polaroid-restore:hover {
+  background: #3b82f6;
+  transform: scale(1.1);
+}
+
+/* 已收纳照片标记 */
+.gallery-polaroid.collected {
+  box-shadow: 0 3px 15px rgba(59, 130, 246, 0.3);
+}
+
+.gallery-polaroid.collected::before {
+  content: '📥';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  font-size: 16px;
+  z-index: 10;
 }
 
 /* 设置弹窗 */

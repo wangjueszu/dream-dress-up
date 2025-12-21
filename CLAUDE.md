@@ -105,6 +105,17 @@ confirm.mp3, complete.mp3, error.mp3, eject.mp3, developing.mp3, click.mp3
 - 状态：`generateCount`（1-4）、`developingCountRef`（正在显影的胶片计数）
 - 防重复机制：`addedHistoryIdsRef` 防止 React 并发模式下历史记录重复添加
 
+### 照片收纳功能
+
+- 画板照片太多时，可以收纳到 Gallery 中
+- **拖拽收纳**：拖拽照片到 GALLERY 按钮上松开即可收纳
+- **点击收纳**：每张照片右上角有 📥 收纳按钮
+- **拖拽提示**：开始拖拽时，GALLERY 按钮变为 "📥 拖到这里收纳"
+- **角标显示**：GALLERY 按钮显示已收纳照片数量角标
+- **放回画板**：在 Gallery 中点击 📤 按钮可将照片放回画板
+- 数据结构：`HistoryItem.isOnCanvas`（true=画板上，false=已收纳）
+- 主要函数：`collectPhoto(itemId)`, `restoreToCanvas(itemId)`
+
 ### 分享功能
 
 - 点击照片查看大图，底部有「分享」按钮

@@ -55,6 +55,7 @@ interface HistoryItem {
   resultPhoto: string;
   timestamp: number;
   position: { x: number; y: number };
+  isOnCanvas: boolean; // true=显示在画板, false=已收纳到Gallery
 }
 
 // 本地存储 key
@@ -92,6 +93,8 @@ function App() {
   // 拖拽历史记录项
   const historyDragRef = useRef<{ id: string; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const [draggingHistoryId, setDraggingHistoryId] = useState<string | null>(null);
+  const [isOverGallery, setIsOverGallery] = useState(false); // 拖拽时是否悬停在 Gallery 按钮上
+  const galleryBtnRef = useRef<HTMLButtonElement>(null);
 
   // 分享功能状态
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -136,13 +139,14 @@ function App() {
       const saved = localStorage.getItem(HISTORY_KEY);
       if (saved) {
         const items = JSON.parse(saved) as HistoryItem[];
-        // 为旧数据添加位置信息
+        // 为旧数据添加位置信息和 isOnCanvas 字段
         const itemsWithPosition = items.map((item, index) => ({
           ...item,
           position: item.position || {
             x: 500 + (index % 5) * 180,
             y: 80 + Math.floor(index / 5) * 220
-          }
+          },
+          isOnCanvas: item.isOnCanvas !== undefined ? item.isOnCanvas : true, // 旧数据默认显示在画板
         }));
         setHistory(itemsWithPosition);
       }
@@ -574,6 +578,7 @@ function App() {
                   resultPhoto: imageUrl,
                   timestamp: Date.now(),
                   position: finalPosition,
+                  isOnCanvas: true, // 新生成的照片默认显示在画板上
                 };
                 // 使用 queueMicrotask 避免在 setState 回调内嵌套 setState
                 queueMicrotask(() => {
@@ -752,6 +757,7 @@ function App() {
                   resultPhoto: imageUrl,
                   timestamp: Date.now(),
                   position: completedFilm.position,
+                  isOnCanvas: true, // 新生成的照片默认显示在画板上
                 };
                 queueMicrotask(() => {
                   setHistory(prevHistory => {
@@ -919,6 +925,30 @@ function App() {
     setDeleteConfirmItem(null);
   };
 
+  // 收纳照片到 Gallery
+  const collectPhoto = (itemId: string) => {
+    playSound('click');
+    setHistory(prev => {
+      const updated = prev.map(h =>
+        h.id === itemId ? { ...h, isOnCanvas: false } : h
+      );
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // 从 Gallery 放回画板
+  const restoreToCanvas = (itemId: string) => {
+    playSound('click');
+    setHistory(prev => {
+      const updated = prev.map(h =>
+        h.id === itemId ? { ...h, isOnCanvas: true } : h
+      );
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // 打开分享菜单
   const openShareMenu = async () => {
     if (!selectedHistoryItem) return;
@@ -1040,6 +1070,14 @@ function App() {
       hasDraggedRef.current = true;
     }
 
+    // 检测是否悬停在 Gallery 按钮上
+    if (galleryBtnRef.current) {
+      const rect = galleryBtnRef.current.getBoundingClientRect();
+      const isOver = clientX >= rect.left && clientX <= rect.right &&
+                     clientY >= rect.top && clientY <= rect.bottom;
+      setIsOverGallery(isOver);
+    }
+
     const newX = historyDragRef.current.offsetX + dx;
     const newY = historyDragRef.current.offsetY + dy;
 
@@ -1054,15 +1092,30 @@ function App() {
   const handleHistoryDragEnd = useCallback(() => {
     if (!historyDragRef.current) return;
 
-    // 保存位置到 localStorage
-    setHistory(prev => {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(prev));
-      return prev;
-    });
+    const draggedId = historyDragRef.current.id;
 
+    // 如果放在 Gallery 按钮上，收纳照片
+    if (isOverGallery) {
+      playSound('click');
+      setHistory(prev => {
+        const updated = prev.map(h =>
+          h.id === draggedId ? { ...h, isOnCanvas: false } : h
+        );
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      // 保存位置到 localStorage
+      setHistory(prev => {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(prev));
+        return prev;
+      });
+    }
+
+    setIsOverGallery(false);
     setDraggingHistoryId(null);
     historyDragRef.current = null;
-  }, []);
+  }, [isOverGallery]);
 
   // 监听历史记录拖拽事件
   useEffect(() => {
@@ -1177,8 +1230,19 @@ function App() {
         <button className="settings-btn" onClick={() => { playSound('click'); setShowSettings(true); }}>
           SETTINGS
         </button>
-        <button className="history-btn" onClick={() => { playSound('click'); setShowHistory(true); }}>
-          GALLERY
+        <button
+          ref={galleryBtnRef}
+          className={`history-btn ${draggingHistoryId ? 'drop-target' : ''} ${isOverGallery ? 'drop-hover' : ''}`}
+          onClick={() => { playSound('click'); setShowHistory(true); }}
+        >
+          {draggingHistoryId ? '📥 拖到这里收纳' : (
+            <>
+              GALLERY
+              {history.filter(h => !h.isOnCanvas).length > 0 && (
+                <span className="gallery-badge">{history.filter(h => !h.isOnCanvas).length}</span>
+              )}
+            </>
+          )}
         </button>
       </div>
 
@@ -1449,8 +1513,8 @@ function App() {
           );
         })}
 
-        {/* 画板上的历史照片 */}
-        {history.map((item) => (
+        {/* 画板上的历史照片（只显示 isOnCanvas=true 的） */}
+        {history.filter(h => h.isOnCanvas).map((item) => (
           <div
             key={item.id}
             className={`film-card completed ${draggingHistoryId === item.id ? 'dragging' : ''}`}
@@ -1476,6 +1540,19 @@ function App() {
               )}
               <span className="film-dream">{item.dream}</span>
             </div>
+            {/* 收纳按钮 */}
+            <button
+              className="film-collect"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                collectPhoto(item.id);
+              }}
+              title="收纳到相册"
+            >
+              📥
+            </button>
             <button
               className="film-delete"
               onMouseDown={(e) => e.stopPropagation()}
@@ -1539,7 +1616,7 @@ function App() {
                   return (
                     <div
                       key={item.id}
-                      className="gallery-polaroid"
+                      className={`gallery-polaroid ${!item.isOnCanvas ? 'collected' : ''}`}
                       style={{ '--rotation': `${rotation}deg` } as React.CSSProperties}
                       onClick={() => setSelectedHistoryItem(item)}
                     >
@@ -1550,6 +1627,19 @@ function App() {
                         <span className="gallery-polaroid-dream">{item.dream}</span>
                         <span className="gallery-polaroid-date">{new Date(item.timestamp).toLocaleDateString()}</span>
                       </div>
+                      {/* 放回画板按钮（仅已收纳的照片显示） */}
+                      {!item.isOnCanvas && (
+                        <button
+                          className="gallery-polaroid-restore"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            restoreToCanvas(item.id);
+                          }}
+                          title="放回画板"
+                        >
+                          📤
+                        </button>
+                      )}
                       <button
                         className="gallery-polaroid-delete"
                         onClick={(e) => {

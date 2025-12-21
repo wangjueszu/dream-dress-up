@@ -103,6 +103,7 @@ confirm.mp3, complete.mp3, error.mp3, eject.mp3, developing.mp3, click.mp3
 - 并行调用 API 生成，各自独立显影
 - 显影音效智能管理：第一张开始时播放，最后一张完成时停止
 - 状态：`generateCount`（1-4）、`developingCountRef`（正在显影的胶片计数）
+- 防重复机制：`addedHistoryIdsRef` 防止 React 并发模式下历史记录重复添加
 
 ### 分享功能
 
